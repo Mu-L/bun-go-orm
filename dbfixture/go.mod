@@ -1,13 +1,11 @@
 module github.com/uptrace/bun/dbfixture
 
-go 1.23
-
-toolchain go1.23.2
+go 1.22.0
 
 replace github.com/uptrace/bun => ../
 
 require (
-	github.com/uptrace/bun v1.2.5
+	github.com/uptrace/bun v1.2.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 

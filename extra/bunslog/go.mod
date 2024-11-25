@@ -1,12 +1,10 @@
 module github.com/uptrace/bun/extra/bunslog
 
-go 1.23
-
-toolchain go1.23.2
+go 1.22.0
 
 replace github.com/uptrace/bun => ../..
 
-require github.com/uptrace/bun v1.2.5
+require github.com/uptrace/bun v1.2.6
 
 require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
