@@ -1,13 +1,11 @@
 module github.com/uptrace/bun/dialect/mssqldialect
 
-go 1.23
-
-toolchain go1.23.2
+go 1.22.0
 
 replace github.com/uptrace/bun => ../..
 
 require (
-	github.com/uptrace/bun v1.2.5
+	github.com/uptrace/bun v1.2.6
 	golang.org/x/mod v0.22.0
 )
 
