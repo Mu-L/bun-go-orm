@@ -1,14 +1,12 @@
 module github.com/uptrace/bun/driver/pgdriver
 
-go 1.23
-
-toolchain go1.23.2
+go 1.22.0
 
 replace github.com/uptrace/bun => ../..
 
 require (
 	github.com/stretchr/testify v1.8.1
-	github.com/uptrace/bun v1.2.5
+	github.com/uptrace/bun v1.2.6
 	mellium.im/sasl v0.3.2
 )
 
