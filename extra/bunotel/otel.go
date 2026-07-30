@@ -27,6 +27,7 @@ type QueryHook struct {
 	formatQueries    bool
 	tracer           trace.Tracer
 	meter            metric.Meter
+	meterProvider    metric.MeterProvider
 	queryHistogram   metric.Int64Histogram
 	spanNameQueryGen func(*bun.QueryEvent) string
 }
@@ -60,7 +61,14 @@ func (h *QueryHook) Init(db *bun.DB) {
 		labels = append(labels, sys)
 	}
 
-	otelsql.ReportDBStatsMetrics(db.DB, otelsql.WithAttributes(labels...))
+	opts := []otelsql.Option{otelsql.WithAttributes(labels...)}
+	// Only override the meter provider when the user configured one, otherwise
+	// otelsql keeps using the global meter provider.
+	if h.meterProvider != nil {
+		opts = append(opts, otelsql.WithMeterProvider(h.meterProvider))
+	}
+
+	otelsql.ReportDBStatsMetrics(db.DB, opts...)
 }
 
 func (h *QueryHook) BeforeQuery(ctx context.Context, event *bun.QueryEvent) context.Context {
