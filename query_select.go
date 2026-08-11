@@ -1214,7 +1214,8 @@ func (q *SelectQuery) Clone() *SelectQuery {
 				columns:        cloneArgs(q.columns),
 				modelTableName: q.modelTableName,
 			},
-			where: make([]schema.QueryWithSep, len(q.where)),
+			where:      make([]schema.QueryWithSep, len(q.where)),
+			whereHasOr: q.whereHasOr,
 		},
 
 		idxHintsQuery: idxHintsQuery{

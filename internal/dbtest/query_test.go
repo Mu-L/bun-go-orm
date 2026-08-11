@@ -2016,6 +2016,29 @@ func TestQuery(t *testing.T) {
 	})
 }
 
+func TestSelectQueryClone(t *testing.T) {
+	type SoftDelete1 struct {
+		bun.BaseModel `bun:"soft_deletes,alias:soft_delete"`
+
+		ID        int64     `bun:",pk,autoincrement"`
+		DeletedAt time.Time `bun:",soft_delete,nullzero"`
+	}
+
+	testEachDB(t, func(t *testing.T, dbName string, db *bun.DB) {
+		q := db.NewSelect().Model(new(SoftDelete1)).
+			Where("id = 1").
+			WhereOr("id = 2")
+
+		original, err := q.AppendQuery(db.QueryGen(), nil)
+		require.NoError(t, err)
+
+		clone, err := q.Clone().AppendQuery(db.QueryGen(), nil)
+		require.NoError(t, err)
+
+		require.Equal(t, string(original), string(clone))
+	})
+}
+
 func TestAlterTable(t *testing.T) {
 	type Movie struct {
 		bun.BaseModel `bun:"table:hobbies.movies"`
