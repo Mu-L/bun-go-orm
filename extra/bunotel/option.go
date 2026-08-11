@@ -57,6 +57,7 @@ func WithTracerProvider(tp trace.TracerProvider) Option {
 func WithMeterProvider(mp metric.MeterProvider) Option {
 	return func(h *QueryHook) {
 		if mp != nil {
+			h.meterProvider = mp
 			h.meter = mp.Meter("github.com/uptrace/bun")
 		}
 	}
