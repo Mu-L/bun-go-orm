@@ -144,12 +144,33 @@ func baseValues(model TableModel, fields []*schema.Field) map[internal.MapKey][]
 	fieldIndex := model.Relation().Field.Index
 	m := make(map[internal.MapKey][]reflect.Value)
 	key := make([]any, 0, len(fields))
+	seen := make(map[baseValueKey]struct{})
 	walk(model.rootValue(), model.parentIndex(), func(v reflect.Value) {
+		dest := v.FieldByIndex(fieldIndex)
 		key = modelKey(key[:0], v, fields)
 		mapKey := internal.NewMapKey(key)
-		m[mapKey] = append(m[mapKey], v.FieldByIndex(fieldIndex))
+		// The same struct can be reachable more than once, for example when several
+		// base models share a pointer to it. Joined models are appended to the
+		// destination field, so collecting it twice for the same key would
+		// duplicate them.
+		if dest.CanAddr() {
+			seenKey := baseValueKey{mapKey: mapKey, dest: dest.Addr().Interface()}
+			if _, ok := seen[seenKey]; ok {
+				return
+			}
+			seen[seenKey] = struct{}{}
+		}
+		m[mapKey] = append(m[mapKey], dest)
 	})
 	return m
+}
+
+// baseValueKey identifies a destination field already collected for a base model
+// key. Models that share a destination field but not the key still need their own
+// entry, so both parts are required.
+type baseValueKey struct {
+	mapKey internal.MapKey
+	dest   any
 }
 
 func modelKey(key []any, strct reflect.Value, fields []*schema.Field) []any {

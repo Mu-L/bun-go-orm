@@ -38,6 +38,7 @@ func TestORM(t *testing.T) {
 		{testHasOneRelationWithOpts},
 		{testHasManyRelationWithOpts},
 		{testM2MRelationOnEmbeddedBaseModel},
+		{testRelationsOnSharedBaseModel},
 	}
 
 	testEachDB(t, func(t *testing.T, dbName string, db *bun.DB) {
@@ -733,6 +734,133 @@ func testM2MRelationOnEmbeddedBaseModel(t *testing.T, db *bun.DB) {
 	require.NoError(t, err)
 	require.Len(t, wrapped, 2)
 	require.Len(t, wrapped[1].Items, 1)
+}
+
+// testRelationsOnSharedBaseModel checks that relations loaded on a model that is
+// reachable from several base rows are not appended once per row. See #1386.
+func testRelationsOnSharedBaseModel(t *testing.T, db *bun.DB) {
+	type Tag struct {
+		bun.BaseModel `bun:"table:tags,alias:tag"`
+
+		ID   int64 `bun:",pk"`
+		Name string
+	}
+
+	type Note struct {
+		bun.BaseModel `bun:"table:notes,alias:note"`
+
+		ID     int64 `bun:",pk"`
+		NodeID int64
+	}
+
+	type Node struct {
+		bun.BaseModel `bun:"table:nodes,alias:node"`
+
+		ID    int64   `bun:",pk"`
+		Tags  []*Tag  `bun:"m2m:node_to_tags,join:Node=Tag"`
+		Notes []*Note `bun:"rel:has-many,join:id=node_id"`
+	}
+
+	type NodeToTag struct {
+		bun.BaseModel `bun:"table:node_to_tags,alias:node_to_tag"`
+
+		NodeID int64 `bun:",pk"`
+		Node   *Node `bun:"rel:belongs-to,join:node_id=id"`
+		TagID  int64 `bun:",pk"`
+		Tag    *Tag  `bun:"rel:belongs-to,join:tag_id=id"`
+	}
+
+	type ParentNode struct {
+		bun.BaseModel `bun:"table:parent_nodes,alias:parent_node"`
+
+		ID       int64 `bun:",pk"`
+		ParentID int64
+		NodeID   int64
+		Node     *Node `bun:"rel:belongs-to,join:node_id=id"`
+	}
+
+	type Parent struct {
+		bun.BaseModel `bun:"table:parents,alias:parent"`
+
+		ID    int64         `bun:",pk"`
+		Nodes []*ParentNode `bun:"rel:has-many,join:id=parent_id"`
+	}
+
+	type Child struct {
+		bun.BaseModel `bun:"table:children,alias:child"`
+
+		ID       int64 `bun:",pk"`
+		ParentID int64
+		Parent   *Parent `bun:"rel:belongs-to,join:parent_id=id"`
+	}
+
+	db.RegisterModel((*NodeToTag)(nil))
+
+	// Every child points at the same parent, so all children end up sharing
+	// a single node: the number of children must not affect the node relations.
+	for _, numChildren := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("children=%d", numChildren), func(t *testing.T) {
+			mustResetModel(t, ctx, db,
+				(*Tag)(nil),
+				(*Note)(nil),
+				(*Node)(nil),
+				(*NodeToTag)(nil),
+				(*ParentNode)(nil),
+				(*Parent)(nil),
+				(*Child)(nil),
+			)
+
+			_, err := db.NewInsert().
+				Model(&[]*Tag{{ID: 1, Name: "tag 1"}, {ID: 2, Name: "tag 2"}}).Exec(ctx)
+			require.NoError(t, err)
+
+			_, err = db.NewInsert().Model(&[]*Node{{ID: 1}}).Exec(ctx)
+			require.NoError(t, err)
+
+			_, err = db.NewInsert().
+				Model(&[]*NodeToTag{{NodeID: 1, TagID: 1}, {NodeID: 1, TagID: 2}}).Exec(ctx)
+			require.NoError(t, err)
+
+			_, err = db.NewInsert().
+				Model(&[]*Note{{ID: 1, NodeID: 1}, {ID: 2, NodeID: 1}}).Exec(ctx)
+			require.NoError(t, err)
+
+			_, err = db.NewInsert().Model(&[]*Parent{{ID: 1}}).Exec(ctx)
+			require.NoError(t, err)
+
+			_, err = db.NewInsert().
+				Model(&[]*ParentNode{{ID: 1, ParentID: 1, NodeID: 1}}).Exec(ctx)
+			require.NoError(t, err)
+
+			children := make([]*Child, 0, numChildren)
+			for i := 1; i <= numChildren; i++ {
+				children = append(children, &Child{ID: int64(i), ParentID: 1})
+			}
+			_, err = db.NewInsert().Model(&children).Exec(ctx)
+			require.NoError(t, err)
+
+			var out []*Child
+			err = db.NewSelect().
+				Model(&out).
+				Relation("Parent").
+				Relation("Parent.Nodes").
+				Relation("Parent.Nodes.Node").
+				Relation("Parent.Nodes.Node.Tags").
+				Relation("Parent.Nodes.Node.Notes").
+				Scan(ctx)
+			require.NoError(t, err)
+			require.Len(t, out, numChildren)
+
+			for i, child := range out {
+				require.Len(t, child.Parent.Nodes, 1, "child %d", i)
+
+				node := child.Parent.Nodes[0].Node
+				require.NotNil(t, node, "child %d", i)
+				require.Len(t, node.Tags, 2, "child %d", i)
+				require.Len(t, node.Notes, 2, "child %d", i)
+			}
+		})
+	}
 }
 
 type Genre struct {
