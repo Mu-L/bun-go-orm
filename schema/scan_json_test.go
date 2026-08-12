@@ -39,6 +39,34 @@ func TestScanJSONUnaddressableInterface(t *testing.T) {
 	require.Contains(t, err.Error(), "nonaddressable")
 }
 
+func TestScanJSONIntoInterfaceNonAddressableNil(t *testing.T) {
+	var value any = map[string]any{"a": 1}
+	dest := reflect.ValueOf(&value).Elem()
+
+	require.NotPanics(t, func() {
+		err := scanJSONIntoInterface(dest, nil)
+		require.Error(t, err)
+	})
+}
+
+// Scanning NULL zeroes an addressable dest.
+func TestScanJSONAddressableNull(t *testing.T) {
+	value := map[string]any{"a": float64(1)}
+	dest := reflect.ValueOf(&value).Elem()
+
+	require.NoError(t, scanJSON(dest, nil))
+	require.Nil(t, value)
+}
+
+// A typed nil map inside an interface is already zero, so scanning NULL
+// into it stays a no-op.
+func TestScanJSONIntoInterfaceNilMapNull(t *testing.T) {
+	var value any = map[string]any(nil)
+	dest := reflect.ValueOf(&value).Elem()
+
+	require.NoError(t, scanJSONIntoInterface(dest, nil))
+}
+
 // json_use_number fields scan through scanJSONUseNumber, which calls
 // dest.Addr() as well.
 func TestScanJSONUseNumberUnaddressable(t *testing.T) {
