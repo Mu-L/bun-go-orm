@@ -537,9 +537,6 @@ func scanJSONIntoInterface(dest reflect.Value, src any) error {
 	}
 
 	dest = dest.Elem()
-	if !dest.CanAddr() {
-		return fmt.Errorf("bun: Scan(nonaddressable %s)", dest.Type())
-	}
 	if fn := Scanner(dest.Type()); fn != nil {
 		return fn(dest, src)
 	}
