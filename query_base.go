@@ -776,7 +776,7 @@ type whereBaseQuery struct {
 }
 
 func (q *whereBaseQuery) addWhere(where schema.QueryWithSep) {
-	if strings.Contains(where.Sep, "OR") {
+	if strings.Contains(strings.ToUpper(where.Sep), "OR") {
 		q.whereHasOr = true
 	}
 	q.where = append(q.where, where)
