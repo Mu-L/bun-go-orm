@@ -1945,6 +1945,56 @@ func TestQuery(t *testing.T) {
 				}))
 			},
 		},
+		{
+			id: 205,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewSelect().Model(new(SoftDelete1)).
+					Where("id = 1").
+					WhereOr("id = 2")
+			},
+		},
+		{
+			id: 206,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewSelect().Model(new(SoftDelete1)).
+					WhereOr("id = 1").
+					WhereOr("id = 2")
+			},
+		},
+		{
+			id: 207,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewSelect().Model(new(SoftDelete1)).
+					Where("id = 1").
+					WhereOr("id = 2").
+					WhereDeleted()
+			},
+		},
+		{
+			id: 208,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewSelect().Model(new(SoftDelete1)).
+					Where("id = 1").
+					Where("id = 2")
+			},
+		},
+		{
+			id: 209,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewDelete().Model(new(SoftDelete1)).
+					Where("id = 1").
+					WhereOr("id = 2")
+			},
+		},
+		{
+			id: 210,
+			query: func(db *bun.DB) schema.QueryAppender {
+				return db.NewUpdate().Model(new(SoftDelete1)).
+					Set("id = id").
+					Where("id = 1").
+					WhereOr("id = 2")
+			},
+		},
 	}
 
 	timeRE := regexp.MustCompile(`'2\d{3}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?(\+\d{2}:\d{2})?'`)
@@ -1961,6 +2011,55 @@ func TestQuery(t *testing.T) {
 					query = timeRE.ReplaceAll(query, []byte("[TIME]"))
 					cupaloy.SnapshotT(t, string(query))
 				}
+			})
+		}
+	})
+}
+
+func TestSelectQueryClone(t *testing.T) {
+	type SoftDelete1 struct {
+		bun.BaseModel `bun:"soft_deletes,alias:soft_delete"`
+
+		ID        int64     `bun:",pk,autoincrement"`
+		DeletedAt time.Time `bun:",soft_delete,nullzero"`
+	}
+
+	tests := []struct {
+		name    string
+		build   func(*bun.SelectQuery) *bun.SelectQuery
+		pattern string
+	}{
+		{
+			name: "WhereOr",
+			build: func(q *bun.SelectQuery) *bun.SelectQuery {
+				return q.Where("id = 1").WhereOr("id = 2")
+			},
+			pattern: `WHERE \(\(id = 1\) OR \(id = 2\)\)`,
+		},
+		{
+			name: "WhereGroup or",
+			build: func(q *bun.SelectQuery) *bun.SelectQuery {
+				return q.Where("id = 1").WhereGroup(" or ", func(q *bun.SelectQuery) *bun.SelectQuery {
+					return q.Where("id = 2")
+				})
+			},
+			pattern: `WHERE \(\(id = 1\) or \(\(id = 2\)\)\)`,
+		},
+	}
+
+	testEachDB(t, func(t *testing.T, dbName string, db *bun.DB) {
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				q := tt.build(db.NewSelect().Model(new(SoftDelete1)))
+
+				original, err := q.AppendQuery(db.QueryGen(), nil)
+				require.NoError(t, err)
+
+				clone, err := q.Clone().AppendQuery(db.QueryGen(), nil)
+				require.NoError(t, err)
+
+				require.Equal(t, string(original), string(clone))
+				require.Regexp(t, tt.pattern, string(clone))
 			})
 		}
 	})

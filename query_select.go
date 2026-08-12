@@ -173,13 +173,13 @@ func (q *SelectQuery) WhereOr(query string, args ...any) *SelectQuery {
 
 // WhereGroup groups WHERE conditions with the given separator (AND/OR).
 func (q *SelectQuery) WhereGroup(sep string, fn func(*SelectQuery) *SelectQuery) *SelectQuery {
-	saved := q.where
-	q.where = nil
+	saved, savedHasOr := q.where, q.whereHasOr
+	q.where, q.whereHasOr = nil, false
 
 	q = fn(q)
 
 	where := q.where
-	q.where = saved
+	q.where, q.whereHasOr = saved, savedHasOr
 
 	q.addWhereGroup(sep, where)
 
@@ -1234,6 +1234,7 @@ func (q *SelectQuery) Clone() *SelectQuery {
 			},
 			where:       make([]schema.QueryWithSep, len(q.where)),
 			whereFields: cloneWhereFields(q.whereFields),
+			whereHasOr:  q.whereHasOr,
 		},
 
 		idxHintsQuery: idxHintsQuery{

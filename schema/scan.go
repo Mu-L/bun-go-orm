@@ -352,6 +352,9 @@ func scanJSON(dest reflect.Value, src any) error {
 	if src == nil {
 		return scanNull(dest)
 	}
+	if !dest.CanAddr() {
+		return fmt.Errorf("bun: Scan(nonaddressable %s)", dest.Type())
+	}
 
 	b, err := toBytes(src)
 	if err != nil {
@@ -364,6 +367,9 @@ func scanJSON(dest reflect.Value, src any) error {
 func scanJSONUseNumber(dest reflect.Value, src any) error {
 	if src == nil {
 		return scanNull(dest)
+	}
+	if !dest.CanAddr() {
+		return fmt.Errorf("bun: Scan(nonaddressable %s)", dest.Type())
 	}
 
 	b, err := toBytes(src)
@@ -511,6 +517,9 @@ func PtrScanner(fn ScannerFunc) ScannerFunc {
 func scanNull(dest reflect.Value) error {
 	if nilable(dest.Kind()) && dest.IsNil() {
 		return nil
+	}
+	if !dest.CanAddr() {
+		return fmt.Errorf("bun: Scan(nonaddressable %s)", dest.Type())
 	}
 	dest.Set(reflect.New(dest.Type()).Elem())
 	return nil
