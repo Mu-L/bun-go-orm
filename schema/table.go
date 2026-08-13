@@ -422,8 +422,7 @@ func (t *Table) LookupField(name string) *Field {
 	}
 
 	if v, ok := t.lookupCache.Load(name); ok {
-		field, _ := v.(*Field)
-		return field
+		return v.(*Field)
 	}
 
 	field := t.lookupFieldSlow(name)
