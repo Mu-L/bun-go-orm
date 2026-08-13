@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jinzhu/inflection"
@@ -38,6 +39,11 @@ func SetTableNameInflector(fn func(string) string) {
 // Table represents a SQL table created from Go struct.
 type Table struct {
 	dialect Dialect
+
+	// lookupCache memoizes LookupField results for dotted/prefixed column
+	// names (e.g. "author__name"). Those names miss FieldMap and take the
+	// slow path below, which clones the Field on every call.
+	lookupCache sync.Map // map[string]*Field
 
 	Type      reflect.Type
 	ZeroValue reflect.Value // reflect.Struct
@@ -401,11 +407,30 @@ func (t *Table) addField(field *Field) {
 	}
 }
 
+// LookupField returns the field for the given column name. Names may address
+// fields of embedded/joined structs using the "__" separator, for example
+// "author__name".
+//
+// The result is memoized: resolving a prefixed name walks StructMap and clones
+// the field with a rewritten index, and Scan calls this for every column of
+// every row. The returned *Field is treated as read-only by callers, which is
+// already assumed for the FieldMap fast path above, so the value is safe to
+// share.
 func (t *Table) LookupField(name string) *Field {
 	if field, ok := t.FieldMap[name]; ok {
 		return field
 	}
 
+	if v, ok := t.lookupCache.Load(name); ok {
+		return v.(*Field)
+	}
+
+	field := t.lookupFieldSlow(name)
+	t.lookupCache.Store(name, field)
+	return field
+}
+
+func (t *Table) lookupFieldSlow(name string) *Field {
 	table := t
 	var index []int
 	for {
